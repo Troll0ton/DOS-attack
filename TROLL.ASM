@@ -3,31 +3,16 @@
 org 100h 
 
 Start:
-;-----------------------DEFINE----------------------------
+		mov ah, 01h		;input (in al)
+		int 21h
 
-		input   EQU mov ah, 01h
-		sym_out EQU mov ah, 02h
-		str_out EQU mov ah, 09h
-		exit    EQU mov ax, 4C00h
+		mov dl, al		;copy into out 
 
-		dos_srv EQU int 21h
+		mov ah, 02h		;sym out
+		int 21h
 
-;-----------------------PROGRAM---------------------------
-
-		input
-		dos_srv
-
-		mov dl, al
-
-		KAB=10h
-
-		sym_out
-		dos_srv
-
-		exit
-		dos_srv
-
-;---------------------------------------------------------
+		mov ax, 4c00h		;exit
+		int 21h
  
 end		Start
 
