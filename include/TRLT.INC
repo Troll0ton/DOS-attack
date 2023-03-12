@@ -1,6 +1,41 @@
 ;------------------------------------------------------
 ;|||||||||||||||||TRANSLATIONS|||||||||||||||||||||||||
 ;------------------------------------------------------
+;Handle input of the program
+;------------------------------------------------------
+;	Needs:		input your number (00002 for example)
+;	Destroy List:	AX, BX, CX, DX, SI, ES
+;	Return:		two numbers in Num[]
+;------------------------------------------------------
+HandleIn		proc
+
+		Call InLine		;Input number in dec
+		Call CnvLnDec		;Convert to num LINE array
+		mov word ptr Num[0], ax
+		Call TrToHex		;translate to hex
+		mov bx, 80*2*2+6 	;pos in VM
+		mov si, 16d			;max len of line
+		mov cx, si
+		mov si, offset Troll		
+		Call OutLine		;print line
+		Call ClrArr
+
+		Call InLine
+		Call CnvLnDec
+		mov word ptr Num[2], ax
+		Call TrToHex		
+		mov bx, 80*3*2+6 	
+		mov si, 16d			
+		mov cx, si
+		mov si, offset Troll
+		Call OutLine		
+		Call ClrArr
+
+		ret
+		endp
+;------------------------------------------------------
+;||||||||||||||||||||||||||||||||||||||||||||||||||||||
+;------------------------------------------------------
 ;transform to bin
 ;------------------------------------------------------
 ;	Needs:		num in AX
@@ -8,22 +43,16 @@
 ;	Return:		number in array Num
 ;------------------------------------------------------
 TrToBin		proc
-		mov bx, ax
+		mov bx, 15d	; it is length of out line
 
-		mov ax, bx
+@@Next:	mov dx, ax	
+		and dx, 1d	; dl = ax % 2
+		shr ax, 1d	; ax = ax / 2
 
-		mov bx, 15d
-		mov dh, 2d
+		add dx, 48d	;transform to "char"
+		mov byte ptr Troll[bx], dl  ;saved into line
 
-@@Next:		div dh ; ah = ax mod 2, al = ax div 2
-		mov dl, ah
-		add dl, 48d
-		mov byte ptr Troll[bx], dl  
-		xor ah, ah
-
-		dec bx
-
-		mov dh, 2d
+		dec bx	;move to next num
 
 		cmp ax, 0h
 		jne @@Next
@@ -37,24 +66,20 @@ TrToBin		proc
 ;transform to dec
 ;------------------------------------------------------
 ;	Needs:		num in AX
-;	Destroy List:	ax, bx, dx
-;	Return:		number in array Num
+;	Destroy List:	AX, BX, DX, SI
+;	Return:		number in array Troll
 ;------------------------------------------------------
 TrToDec		proc
+		mov si, 15d		; line length
+		mov bx, 10d		
 
+@@Next:	xor dx, dx	
+		div bx 		; AX = DX_AX / BX, DX = DX_AX % BX 
 
-		mov bx, 15d
-		mov dh, 10d
+		add dx, 48d
+		mov byte ptr Troll[si], dl  ; save sym
 
-@@Next:		div dh ; ah = ax mod 10, al = ax div 10
-		mov dl, ah
-		add dl, 48d
-		mov byte ptr Troll[bx], dl  
-		xor ah, ah
-
-		dec bx
-
-		mov dh, 2d
+		dec si		; move to next sym
 
 		cmp ax, 0h
 		jne @@Next
@@ -68,31 +93,28 @@ TrToDec		proc
 ;transform to hex
 ;------------------------------------------------------
 ;	Needs:		num in AX
-;	Destroy List:	ax, bx, dx
-;	Return:		number in array Num
+;	Destroy List:	AX, BX, DX
+;	Return:		number in array Troll
 ;------------------------------------------------------
 TrToHex		proc
 
 		mov bx, 15d
-		mov dh, 16d
 
-@@Next:		div dh ; ah = ax mod 16, al = ax div 16
-		mov dl, ah
+@@Next:	mov dx, ax  ; dx = ax % 16
+		and dx, 0Fh	; mask
+
+		shr ax, 4d	; ax = ax / 16
 
 		cmp dl, 10d
-
-		jb @@Num
-		sub dl, 10d
-		add dl, 41h
+		jb @@Num	; consider num, sym cases
+ 				
+		add dx, 55d ; to sym
 		jmp @@Skip
-@@Num:	add dl, 30h
-@@Skip:
-		mov byte ptr Troll[bx], dl  
-		mov ah, 0h
 
+@@Num:	add dx, 30h	; to num
+
+@@Skip:	mov byte ptr Troll[bx], dl  ; save sym
 		dec bx
-		mov dh, 16d
-
 		cmp ax, 0h
 		jne @@Next
 		
@@ -104,31 +126,75 @@ TrToHex		proc
 ;------------------------------------------------------
 ;convert line to dec
 ;------------------------------------------------------
-;	IN AX - num
+;	Needs:		num in Line
+;	Destroy List:	AX, BX, CX, DX, SI
+;	Return:		num in AX
 ;------------------------------------------------------
 CnvLnDec		proc
 		
-		mov dx, 1d
-		xor bx, bx
-		mov cx, 5d
-		mov si, 4d
+		mov dx, 1d	; 10^x
+		xor bx, bx	; result num
+		mov cx, 5d	; counters
+		mov si, 4d	
 
-@@Next:	
-		xor ax, ax	
+@@Next:	xor ax, ax	
 		mov al, byte ptr Line[si]
-		sub al, 48d
-		mul dl
-		add bx, ax
+		sub al, 48d	; transform to num
+		mul dl	; al = al * 10^x
+		add bx, ax	
 		
 		mov ax, 10d
 		mul dl
-		mov dx, ax
+		mov dx, ax	; dx = dx * 10 (dx = 10^x)
 
 		dec si
 
 		loop @@Next
 		
 		mov ax, bx		
+		ret
+		endp
+
+;------------------------------------------------------
+;||||||||||||||||||||||||||||||||||||||||||||||||||||||
+;------------------------------------------------------
+;Print result in different calc systems
+;------------------------------------------------------
+;	Needs:		num in Num[4], position in DI
+;	Destroy List:	AX, BX, CX, DX, SI, ES, DI
+;	Return:		none
+;------------------------------------------------------
+PrntRes		proc
+		
+		mov ax, word ptr Num[4]
+		Call TrToHex		
+		mov bx, di 	
+		mov si, 16d	
+		mov cx, si
+		mov si, offset Troll			
+		Call OutLine
+		Call ClrArr		
+
+		mov ax, word ptr Num[4]
+		Call TrToDec
+		add di, 80*2
+		mov bx, di
+		mov si, 16d
+		mov cx, si
+		mov si, offset Troll
+		Call OutLine
+		Call ClrArr
+
+		mov ax, word ptr Num[4]
+		Call TrToBin
+		add di, 80*2
+		mov bx, di
+		mov si, 16d	
+		mov cx, si
+		mov si, offset Troll
+		Call OutLine
+		Call ClrArr
+	 
 		ret
 		endp
 
